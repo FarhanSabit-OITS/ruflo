@@ -191,6 +191,19 @@ grep -q "execCli(\[\s*'-y'\s*,\s*'metaharness@latest'" "$F" 2>/dev/null || \
 grep -q "cwd: opts" "$F" || miss="$miss no-cwd-passthrough"
 [[ -z "$miss" ]] && ok || bad "$miss"
 
+step "17z40. roundtrip Stage 11 — diff symmetry + dedup discrimination (iter 77)"
+miss=""
+F="$ROOT/scripts/test-pipeline-roundtrip.mjs"
+grep -q "Stage 11 — introduced/cleared symmetric" "$F" 2>/dev/null || miss="$miss no-stage-11"
+grep -q "iter-77-finding-A" "$F" 2>/dev/null || miss="$miss no-finding-A"
+grep -q "iter-77-finding-B" "$F" 2>/dev/null || miss="$miss no-finding-B"
+grep -q "Stage 11a: introducedCount === 1" "$F" 2>/dev/null || miss="$miss no-11a-assert"
+grep -q "Stage 11b: dedup correctly identifies B as cleared" "$F" 2>/dev/null || miss="$miss no-11b-dedup-assert"
+grep -q "Stage 11c: identical findings" "$F" 2>/dev/null || miss="$miss no-11c-identical-assert"
+# Runtime: roundtrip passes (≥60 — iter 77 took it from 51)
+node "$F" 2>&1 | grep -qE "(6[0-9]|[7-9][0-9]+) passed, 0 failed" || miss="$miss roundtrip-fewer-than-60"
+[[ -z "$miss" ]] && ok || bad "$miss"
+
 step "17z39. roundtrip Stage 10 — introduced/cleared findings diff functional (iter 76)"
 miss=""
 F="$ROOT/scripts/test-pipeline-roundtrip.mjs"

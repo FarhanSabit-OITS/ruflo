@@ -442,6 +442,86 @@ try {
   assert(cleared?.id === 'iter-76-synthetic-finding',
     'Stage 10: cleared finding id preserved');
 
+  // ──────────────────────────────────────────────────────────────
+  // STAGE 11 (iter 77) — introducedCount symmetry + dedup discrimination
+  //
+  // Stage 10 proved the CLEARED side. Three more cases to lock the
+  // diff logic completely:
+  //
+  //   11a. introducedCount: baseline clean, current has synthetic
+  //   11b. both-different:  baseline has finding A, current has finding B
+  //                          → introduced=1, cleared=1
+  //   11c. identical:       baseline + current have SAME finding
+  //                          → both counters stay at 0 (dedup works)
+  // ──────────────────────────────────────────────────────────────
+  console.log('\nStage 11 — introduced/cleared symmetric + dedup (iter 77)');
+  const findingA = {
+    severity: 'medium',
+    id: 'iter-77-finding-A',
+    server: 'server-A',
+    tool: 'tool-A',
+    message: 'finding A',
+  };
+  const findingB = {
+    severity: 'high',
+    id: 'iter-77-finding-B',
+    server: 'server-B',
+    tool: 'tool-B',
+    message: 'finding B',
+  };
+
+  // 11a — introduced
+  const baseClean = JSON.parse(JSON.stringify(audit));
+  baseClean.components.mcpScan.json.findings = [];
+  const currentWithA = JSON.parse(JSON.stringify(audit));
+  currentWithA.components.mcpScan.json.findings = [findingA];
+  const baseCleanPath = join(tmp, 'base-clean.json');
+  const currentWithAPath = join(tmp, 'current-A.json');
+  writeFileSync(baseCleanPath, JSON.stringify(baseClean));
+  writeFileSync(currentWithAPath, JSON.stringify(currentWithA));
+  const trendRun11a = runNode('audit-trend.mjs', [
+    '--baseline', baseCleanPath, '--current', currentWithAPath, '--format', 'json',
+  ], 60_000);
+  const m11a = /\{[\s\S]*\}/.exec(trendRun11a.stdout);
+  const trend11a = JSON.parse(m11a[0]);
+  assert(trend11a.delta?.findings?.introducedCount === 1,
+    `Stage 11a: introducedCount === 1 (got ${trend11a.delta?.findings?.introducedCount})`);
+  assert(trend11a.delta?.findings?.clearedCount === 0,
+    `Stage 11a: clearedCount === 0 (got ${trend11a.delta?.findings?.clearedCount})`);
+  assert(trend11a.delta?.findings?.introduced?.[0]?.id === 'iter-77-finding-A',
+    'Stage 11a: introduced finding id preserved');
+
+  // 11b — both different
+  const baselineWithB = JSON.parse(JSON.stringify(audit));
+  baselineWithB.components.mcpScan.json.findings = [findingB];
+  const baselineWithBPath = join(tmp, 'baseline-B.json');
+  writeFileSync(baselineWithBPath, JSON.stringify(baselineWithB));
+  const trendRun11b = runNode('audit-trend.mjs', [
+    '--baseline', baselineWithBPath, '--current', currentWithAPath, '--format', 'json',
+  ], 60_000);
+  const m11b = /\{[\s\S]*\}/.exec(trendRun11b.stdout);
+  const trend11b = JSON.parse(m11b[0]);
+  assert(trend11b.delta?.findings?.introducedCount === 1,
+    `Stage 11b: introducedCount === 1 (got ${trend11b.delta?.findings?.introducedCount})`);
+  assert(trend11b.delta?.findings?.clearedCount === 1,
+    `Stage 11b: clearedCount === 1 (got ${trend11b.delta?.findings?.clearedCount})`);
+  // Dedup discriminates: B was cleared, A was introduced
+  assert(trend11b.delta?.findings?.cleared?.[0]?.id === 'iter-77-finding-B',
+    'Stage 11b: dedup correctly identifies B as cleared');
+  assert(trend11b.delta?.findings?.introduced?.[0]?.id === 'iter-77-finding-A',
+    'Stage 11b: dedup correctly identifies A as introduced');
+
+  // 11c — identical findings on both sides
+  const trendRun11c = runNode('audit-trend.mjs', [
+    '--baseline', currentWithAPath, '--current', currentWithAPath, '--format', 'json',
+  ], 60_000);
+  const m11c = /\{[\s\S]*\}/.exec(trendRun11c.stdout);
+  const trend11c = JSON.parse(m11c[0]);
+  assert(trend11c.delta?.findings?.introducedCount === 0,
+    `Stage 11c: identical findings → introducedCount === 0 (dedup works)`);
+  assert(trend11c.delta?.findings?.clearedCount === 0,
+    `Stage 11c: identical findings → clearedCount === 0`);
+
 } finally {
   try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 }
